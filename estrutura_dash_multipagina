@@ -1,3 +1,5 @@
+
+
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -20,8 +22,11 @@ index_page = html.Div([
     dcc.Link('Go to Page 1', href='/page-1'),
     html.Br(),
     dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
 ])
 
+# PAGINA 1
 page_1_layout = html.Div([
     html.H1('Page 1'),
     dcc.Dropdown(
@@ -30,6 +35,8 @@ page_1_layout = html.Div([
         value='LA'
     ),
     html.Div(id='page-1-content'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
     html.Br(),
     dcc.Link('Go to Page 2', href='/page-2'),
     html.Br(),
@@ -42,6 +49,7 @@ def page_1_dropdown(value):
     return 'You have selected "{}"'.format(value)
 
 
+# PAGINA 2
 page_2_layout = html.Div([
     html.H1('Page 2'),
     dcc.RadioItems(
@@ -53,6 +61,29 @@ page_2_layout = html.Div([
     html.Br(),
     dcc.Link('Go to Page 1', href='/page-1'),
     html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go back to home', href='/')
+])
+
+# PAGINA 3
+page_3_layout = html.Div([
+    html.H1('Page 3'),
+
+
+    dcc.Input(id='input-1-state', type='text', value='Montreal'),
+    dcc.Input(id='input-2-state', type='text', value='Canada'),
+    html.Button(id='submit-button', n_clicks=0, children='Submit'),
+    html.Div(id='output-state'),
+
+
+
+    html.Div(id='page-3-content'),
+    html.Br(),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
     dcc.Link('Go back to home', href='/')
 ])
 
@@ -62,6 +93,21 @@ def page_2_radios(value):
     return 'You have selected "{}"'.format(value)
 
 
+
+# Page 3 callbacks
+@app.callback(dash.dependencies.Output('output-state', 'children'),
+              dash.dependencies.Input('submit-button', 'n_clicks'),
+              dash.dependencies.State('input-1-state', 'value'),
+              dash.dependencies.State('input-2-state', 'value'))
+def update_output(n_clicks, input1, input2):
+    return ('The Button has been pressed {} times,'
+            'Input 1 is "{}",'
+            'and Input 2 is "{}"').format(n_clicks, input1, input2)
+def update_output(n_clicks, input1, input2):
+    return ('The Button has been pressed {} times,'
+            'Input 1 is "{}",'
+            'and Input 2 is "{}"').format(n_clicks, input1, input2)
+
 # Update the index
 @app.callback(dash.dependencies.Output('page-content', 'children'),
               [dash.dependencies.Input('url', 'pathname')])
@@ -70,6 +116,8 @@ def display_page(pathname):
         return page_1_layout
     elif pathname == '/page-2':
         return page_2_layout
+    elif pathname == '/page-3':
+        return page_3_layout
     else:
         return index_page
     # You could also return a 404 "URL not found" page here
