@@ -1,0 +1,79 @@
+import datetime
+from datetime import datetime
+
+import dash_core_components as dcc
+import dash_html_components as html
+import dash
+
+external_stylesheets = [
+    'https://codepen.io/chriddyp/pen/bWLwgP.css',
+    {
+        'href': 'https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css',
+        'rel': 'stylesheet',
+        'integrity': 'sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO',
+        'crossorigin': 'anonymous'
+    }
+]
+
+external_scripts = [
+    'https://www.google-analytics.com/analytics.js',
+    {'src': 'https://cdn.polyfill.io/v2/polyfill.min.js'},
+    {
+        'src': 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.10/lodash.core.js',
+        'integrity': 'sha256-Qqd/EfdABZUcAxjOkMi8eGEivtdTkh3b65xCZL4qAQA=',
+        'crossorigin': 'anonymous'
+    }
+]
+
+app = dash.Dash(__name__,
+                external_scripts=external_scripts,
+                external_stylesheets=external_stylesheets)
+
+app.layout = html.Div([
+
+    # criação do evento com frequência por minuto
+    dcc.Interval(id='interval1min', interval=60 * 1000, n_intervals=0, max_intervals=-1),
+    # criação da tag de texto H1 do relógio de 1 minuto
+    html.H1(id='label1', children=''), 
+
+    # criação do evento com frequência a cada 10 minutos
+    dcc.Interval(id='interval10min', interval=10 * 60 * 1000, n_intervals=0, max_intervals=-1),
+    # criação da tag de texto H1 do relógio de 10 minutos
+    html.H1(id='label2', children=''), 
+
+    # criação do evento com frequência a cada hora
+    dcc.Interval(id='interval1hr', interval= 1* 60 * 60 * 1000, n_intervals=0, max_intervals=-1),
+    # criação da tag de texto H1 do relógio de 60 minutos
+    html.H1(id='label3', children='')
+])
+
+##### EVENTOS DE 1 MINUTO
+# evento = callback
+#
+@app.callback(dash.dependencies.Output('label1', 'children'),
+    [dash.dependencies.Input('interval1min', 'n_intervals')])
+def update_interval1min(n):
+    hora = datetime.now()
+    return str(hora)[0:16]
+
+
+##### EVENTOS DE 10 MINUTOS
+# evento = callback
+# EXEMPLOS DE EVENTOS:
+# - 1) Busca de dados relativos ao portfólio
+@app.callback(dash.dependencies.Output('label2', 'children'),
+    [dash.dependencies.Input('interval10min', 'n_intervals')])
+def update_interval10min(n):
+    hora = datetime.now()
+    return str(hora)[0:16]
+
+##### EVENTOS HORÁRIOS 
+# evento = callback
+#
+@app.callback(dash.dependencies.Output('label3', 'children'),
+    [dash.dependencies.Input('interval1hr', 'n_intervals')])
+def update_interval1hr(n):
+    hora = datetime.now()
+    return str(hora)[0:16]
+
+app.run_server(debug=False, port=8050)
