@@ -1,179 +1,517 @@
-
-import datetime
-from datetime import datetime, timedelta
-
-import requests
-
 import dash
-from dash import dash_table
 from dash import dcc
 from dash import html
-from dash.dependencies import Input, Output
-
+import dash_bootstrap_components as dbc
+from dash.dependencies import Input, Output, State
+# manipular dataframe
 import pandas as pd
+# manipular tabela
+from dash import dash_table
+# plotar gráficos
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-external_stylesheets = [
-    'https://codepen.io/chriddyp/pen/bWLwgP.css',
-    {
-        'href': 'https://stackpath.bootstrapcdn.com/bootstrap/4.1.3/css/bootstrap.min.css',
-        'rel': 'stylesheet',
-        'integrity': 'sha384-MCw98/SFnGE8fJT3GXwEOngsV7Zt27NXFoaoApmYm81iuXoPkFOJwJ8ERdknLPMO',
-        'crossorigin': 'anonymous'
-    }
-]
-external_scripts = [
-    'https://www.google-analytics.com/analytics.js',
-    {'src': 'https://cdn.polyfill.io/v2/polyfill.min.js'},
-    {
-        'src': 'https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.10/lodash.core.js',
-        'integrity': 'sha256-Qqd/EfdABZUcAxjOkMi8eGEivtdTkh3b65xCZL4qAQA=',
-        'crossorigin': 'anonymous'
-    }
-]
+######################################################################################
+################################# INICIALIZAÇÃO APP ##################################
+######################################################################################
 
-app = dash.Dash(__name__,
-                external_scripts=external_scripts,
-                external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, 
+                suppress_callback_exceptions=True, # por termos callbacks de elementos 
+                                                   # que não existem no app.layout,
+                                                   # isso gera alertas sendo útil 
+                                                   # para supressão dos mesmos 
+                external_stylesheets=[dbc.themes.BOOTSTRAP, dbc.icons.FONT_AWESOME])
+                                                   # utilizamos bootstrap no navbar
 
+server = app.server
+######################################################################################
+###################################### NAVBAR ########################################
+######################################################################################
+navbar = dbc.Navbar(
+    dbc.Container([
+        dbc.Row([
+                dbc.Col(
+                    dbc.Row([
+                        html.Div(dbc.Button(html.Span([html.I(id="span_botao",className="fas fa-bars ml-2")]), outline=True, color="info", className="d-grid gap-2 d-md-block", id="btn_sidebar"),style={"width":"30%", "color":"#C1B9AE"}),
+                        html.Div("MEZ",style={"width":"50%", "color":"#C1B9AE"})],
+                        justify="center",align="center",
+                    ),
+                    width=2,xl = 2,md = 3, xs = 4,),
+                dbc.Col(html.Div(""),
+                   width=9,xl=9,md = 7,xs = 5),
+                dbc.Col(                    
+                    dbc.Row([html.Div(dbc.NavItem(dbc.NavLink("KPIs", href="/page-kpis",style={"color":"#C1B9AE"} )),style={"width":"50%"}),
+                             html.Div(dbc.DropdownMenu(
+                                                        children=[
+                                                            dbc.DropdownMenuItem("Página 1", href="/page-1"),
+                                                            dbc.DropdownMenuItem("Página 2", href="/page-2"),
+                                                            dbc.DropdownMenuItem("Página 3", href="/page-3"),
+                                                            dbc.DropdownMenuItem("Página de KPIs", href="/page-kpis"),
+                                                        ],
+                                                        group=True,
+                                                        in_navbar=True,
+                                                        label="Status",
+                                                        color="info", className="m-1",
+                                                        align_end = True,
+                                                       ),style={"width":"50%", "color":"#ffffff"})],justify="center",align="center"),
+                    width=1,  
+                    xl = 1,
+                    md = 2,
+                    xs = 3,
+                    )],align="center",
+                ),
 
-# FUNÇÕES
+        ],
+        fluid="center",
+        style={"width":"92%"},
+        ),
+    color="dark",
+    dark=True,
+    fixed="top",
+    style={"z-index":2}
+)
 
-def buscar_candles(data_inicio, data_fim):
-  mes_dict = { "01" : "JAN","02" : "FEV","03" : "MAR","04" : "ABR","05" : "MAI","06" : "JUN","07" : "JUL","08" : "AGO","09" : "SET","10" : "OUT","11" : "NOV","12" : "DEZ" }
-  mes_nome_num_dict = {   "JAN" : "01","FEV" : "02","MAR" : "03","ABR" : "04","MAI" : "05","JUN" : "06","JUL" : "07","AGO" : "08","SET" : "09","OUT" : "10","NOV" : "11","DEZ" : "12"}
-  submercado_bbce_dict = {0 : "SE",1 : "SU",2 : "NE",3 : "NO"}
-  fonte_bbce_dict = {0 : "I0", 1 : "I5", 2 : "I1", 3 : "CON", 4 : "I8", 5 : "CQ5"}
+######################################################################################
+###################################### FOOTER ########################################
+######################################################################################
 
-  # recebe maturidade e retorna NUMERO de MÊS INICIAL  
-  conversao_maturidade_produto_mes_num_inicial = pd.DataFrame({"M+0": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"], "M+1": ["02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "01"], "M+2": ["03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02"],  "M+3": ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"], "M+4": ["05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03", "04"],  "TRI+0": ["01", "04", "04", "04", "07", "07", "07", "10", "10", "10", "01", "01"], "TRI+1":["04", "07", "07", "07", "10", "10", "10", "01", "01", "01", "04", "04"], "SEM+0": ["01", "07", "07", "07", "07", "07", "07", "01", "01", "01", "01", "01"], "ANU+0":["01","01","01","01","01","01","01","01","01","01","01","01"], "ANU+1":["01","01","01","01","01","01","01","01","01","01","01","01"], "ANU+2":["01","01","01","01","01","01","01","01","01","01","01","01"]})  
-  # recebe maturidade e retorna NUMERO de MÊS FINAL  
-  conversao_maturidade_produto_mes_num_final = pd.DataFrame({"M+0": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"], "M+1": ["02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "01"], "M+2": ["03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02"], "M+3": ["04", "05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03"], "M+4": ["05", "06", "07", "08", "09", "10", "11", "12", "01", "02", "03", "04"], "TRI+0": ["03", "06", "06", "06", "09", "09", "09", "12", "12", "12", "03", "03"], "TRI+1":["06", "09", "09", "09", "12", "12", "12", "03", "03", "03", "06", "06"], "SEM+0": ["06", "12", "12", "12", "12", "12", "12", "06", "06", "06", "06", "06"], "ANU+0": ["12","12","12","12","12","12","12","12","12","12","12","12"], "ANU+1": ["12","12","12","12","12","12","12","12","12","12","12","12"], "ANU+2": ["12","12","12","12","12","12","12","12","12","12","12","12"]}) 
-  # recebe maturidade e retorna NOME de MÊS INICIAL
-  conversao_maturidade_produto_mes_inicial = pd.DataFrame({"M+0": ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"],"M+1": ["FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN"],"M+2": ["MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV"],"M+3": ["ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV", "MAR"],"M+4": ["MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV", "MAR", "ABR"],"TRI+0": ["JAN", "ABR", "ABR", "ABR", "JUL", "JUL", "JUL", "OUT", "OUT", "OUT", "JAN", "JAN"],"TRI+1":["ABR", "JUL", "JUL", "JUL", "OUT", "OUT", "OUT", "JAN", "JAN", "JAN", "ABR", "ABR"],"SEM+0": ["JAN", "JUL", "JUL", "JUL", "JUL", "JUL", "JUL", "JAN", "JAN", "JAN", "JAN", "JAN"],"ANU+0":["JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN"],"ANU+1":["JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN"],"ANU+2":["JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN","JAN"]})
-  # recebe maturidade e retorna NOME de MÊS FINAL 
-  conversao_maturidade_produto_mes_final = pd.DataFrame({"M+0": ["JAN", "FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ"],"M+1": ["FEV", "MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN"],"M+2": ["MAR", "ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV"],"M+3": ["ABR", "MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV", "MAR"],"M+4": ["MAI", "JUN", "JUL", "AGO", "SET", "OUT", "NOV", "DEZ", "JAN", "FEV", "MAR", "ABR"],"TRI+0": ["MAR", "JUN", "JUN", "JUN", "SET", "SET", "SET", "DEZ", "DEZ", "DEZ", "MAR", "MAR"],"TRI+1":["JUN", "SET", "SET", "SET", "DEZ", "DEZ", "DEZ", "MAR", "MAR", "MAR", "JUN", "JUN"],"SEM+0": ["JUN", "DEZ", "DEZ", "DEZ", "DEZ", "DEZ", "DEZ", "JUN", "JUN", "JUN", "JUN", "JUN"],"ANU+0": ["DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ"],"ANU+1": ["DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ"],"ANU+2": ["DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ","DEZ"]})
-  # recebe maturidade e retorna FATOR ADITIVO de ANO INICIAL
-  conversao_maturidade_produto_ano_inicial = pd.DataFrame({"M+0": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],"M+1": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],"M+2": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],"M+3": [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1], "M+4": [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1],"TRI+0": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1],"TRI+1": [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],"SEM+0": [0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1],"ANU+0": [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1],"ANU+1": [1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2],"ANU+2": [2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]})
+footer = html.Footer(
+  dbc.Row([html.Div(html.Img(src='http://mezenergia.com/wp-content/uploads/2020/09/avada-taxi-logo@2x-retina.png',style={"height":"3em"}),style={"text-align":"center"})],
+                          justify="center",
+                   ), style={"position": "fixed","left": "0","bottom": "0","justify-content": "bottom","text-align":"center", "width": "100%","background-color": "#212529","color": "#c1b9a3"} )
 
-  # SYSTEM
-  # API dos candles
-  r = requests.get("https://ogqwg4icu8.execute-api.us-west-2.amazonaws.com/PROD/balcao", headers={"date":data_inicio, "end":data_fim})
+######################################################################################
+###################################### SIDEBAR #######################################
+######################################################################################
 
-  prox_sexta = (datetime.today() + timedelta(days = (4 - datetime.today().weekday()))).strftime("%d/%m/%y")
+SIDEBAR_STYLE = {
+    "position": "fixed",
+    "top":"3.5rem",
+    "left": 0,
+    "bottom": 0,
+    "width": "16rem",
+    "height": "100%",
+    "z-index": 1,
+    "overflow":"auto",
+    "transition": "all 0.5s",
+    "padding": "0rem 1rem",
+    "background-color": "#f8f9fa",}
+SIDEBAR_HIDDEN = {
+    "top":"3.5rem",
+    "position": "fixed",
+    "left": "-16rem",
+    "bottom": 0,
+    "width": "16rem",
+    "height": "100%",
+    "z-index": 2,
+    "overflow":"auto",
+    "transition": "all 0.5s",
+    "padding": "0rem 1rem",
+    "background-color": "#f8f9fa",}
 
-  candles = r.json()
+sidebar = html.Div(
+    [
+        html.H2("Sidebar", className="display-4"),
+        html.Hr(),
+        html.P(
+            "A simple sidebar layout with navigation links", className="lead"
+        ),
+        dbc.Nav(
+            [
+                dbc.NavLink("Página 1", href="/page-1", id="page-1-link"),
+                dbc.NavLink("Página 2", href="/page-2", id="page-2-link"),
+                dbc.NavLink("Página 3", href="/page-3", id="page-3-link"),
+                dbc.NavLink("Página de KPIs", href="/page-kpis", id="page-kpis-link")            ],
+            vertical=True,
+            pills=True,
+        ),
+    ],
+    id="sidebar",
+    style=SIDEBAR_STYLE,)
 
-  candles_out = pd.DataFrame()
+######################################################################################
+################################# CONTEÚDO DA PÁGINA #################################
+######################################################################################
 
-  # cada index_dia é um dia
-  for index_dia in range(len(candles)):
-    dia = candles[index_dia]["date"]
-    prox_sexta = (datetime.strptime(dia, '%Y-%m-%dT%H:%M:%S'+'-03:00') + timedelta(days =(4 - datetime.strptime(dia,'%Y-%m-%dT%H:%M:%S'+'-03:00').weekday()))).strftime("%d/%m/%y")
-    candles_dict = candles[index_dia]["data"]
+CONTENT_STYLE = {
+    "position": "relative",
+    "top":"4rem",
+    "transition": "margin-left .5s",
+    "margin-left": "18rem",
+    "margin-right": "2rem",
+    "padding": "0rem 1rem",
+    "background-color": "#f8f9fa",}
+CONTENT_STYLE_sidebar_hidden = {
+    "position": "relative",
+    "top":"4rem",
+    "transition": "margin-left .5s",
+    "margin-left": "2rem",
+    "margin-right": "2rem",
+    "padding": "0rem 1rem",
+    "background-color": "#f8f9fa",}
 
-    ano_vetor = conversao_maturidade_produto_ano_inicial.applymap(lambda x: x + int(datetime.strptime(prox_sexta, "%d/%m/%y").strftime("%y"))).loc[(conversao_maturidade_produto_mes_inicial["M+0"] == mes_dict[datetime.strptime(prox_sexta, "%d/%m/%y").strftime("%m")]),:] 
-    mes_inicial_vetor = conversao_maturidade_produto_mes_inicial.loc[(conversao_maturidade_produto_mes_inicial["M+0"] == mes_dict[datetime.strptime(prox_sexta, "%d/%m/%y").strftime("%m")]),:] 
-    mes_final_vetor = conversao_maturidade_produto_mes_final.loc[(conversao_maturidade_produto_mes_final["M+0"] == mes_dict[datetime.strptime(prox_sexta, "%d/%m/%y").strftime("%m")]),:] 
+content = html.Div(
 
-    # cada index_produto é um produto de uma periodicidade diferente
-    for index_produto in range(len(candles_dict['M'])):
+    id="page-content",
+    style=CONTENT_STYLE)
 
-      maturidade = 'M' + "+" + str(index_produto)
-      mes_ano_inicial = mes_inicial_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      mes_ano_final = mes_final_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      produto = "SE CON MEN " + mes_ano_inicial +  " - Preço Fixo"
-      candles_dict['M'][index_produto].update({'MATURIDADE':maturidade, 'PRODUTO':produto, 'DATA':dia})
-      candles_out = candles_out.append(candles_dict['M'][index_produto], ignore_index=True)
+######################################################################################
+###################################### LAYOUT ########################################
+######################################################################################
 
-    for index_produto in range(len(candles_dict['TRI'])):
-
-      maturidade = 'TRI' + "+" + str(index_produto)
-      mes_ano_inicial = mes_inicial_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      mes_ano_final = mes_final_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      produto = "SE CON TRI " + mes_ano_inicial + " " + mes_ano_final + " - Preço Fixo"
-      candles_dict['TRI'][index_produto].update({'MATURIDADE':maturidade, 'PRODUTO':produto, 'DATA':dia})
-      candles_out = candles_out.append(candles_dict['TRI'][index_produto], ignore_index=True)
-
-    for index_produto in range(len(candles_dict['SEM'])):
-
-      maturidade = 'SEM' + "+" + str(index_produto)
-      mes_ano_inicial = mes_inicial_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      mes_ano_final = mes_final_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      produto = "SE CON SEM " + mes_ano_inicial + " " + mes_ano_final + " - Preço Fixo"
-      candles_dict['SEM'][index_produto].update({'MATURIDADE':maturidade, 'PRODUTO':produto, 'DATA':dia})
-      candles_out = candles_out.append(candles_dict['SEM'][index_produto], ignore_index=True)
-    
-    for index_produto in range(len(candles_dict['ANU'])):
-
-      maturidade = 'ANU' + "+" + str(index_produto)
-      mes_ano_inicial = mes_inicial_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      mes_ano_final = mes_final_vetor.iloc[0][maturidade] + "/" + str(ano_vetor.iloc[0][maturidade])
-      produto = "SE CON ANU " + mes_ano_inicial + " " + mes_ano_final + " - Preço Fixo"
-      candles_dict['ANU'][index_produto].update({'MATURIDADE':maturidade, 'PRODUTO':produto, 'DATA':dia})
-      candles_out = candles_out.append(candles_dict['ANU'][index_produto], ignore_index=True)
-      
-  candles_out = candles_out.loc[:,["DATA","MATURIDADE","PRODUTO", "ABE", "FEC", "MIN", "MAX", "VOL", "C", "V", "percentV"]].sort_values(by='DATA')
-
-  return candles_out
-
-
-# GLOBAIS
-data_inicio = "2020-01-01"
-data_fim = datetime.today().strftime("%Y-%m-%d")
-
-df = buscar_candles(data_inicio, data_fim)
-
+# layout da página principal
 app.layout = html.Div([
-    # div da tabela
+    navbar,
+    sidebar,
+    content,
+    footer,
+    dcc.Store(id='side_click'),
+
+    dcc.Location(id='url', refresh=False)])
+home_page = html.Div([
+    html.H1('HOME'),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go to Page KPI', href='/page-kpis'),])
+
+# página de path errado
+index_page = html.Div([
+    html.H1('URL não encontrada'),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go to Page KPI', href='/page-kpis'),])
+
+###########################################################################################
+#################################### PAGINA 1 #############################################
+###########################################################################################
+
+################
+# FUNÇÕES ######
+
+# QUEBRA DE NOME
+def nome_produto_to_submercado(nome_produto):
+  try:
+    submercado = nome_produto.split()[0] 
+  except:
+    submercado = ''
+  return submercado
+
+def nome_produto_to_fonte(nome_produto):
+  try:
+    fonte = nome_produto.split()[1] 
+  except:
+    fonte =''
+  return fonte
+
+def nome_produto_to_periodicidade(nome_produto):
+  try:
+    periodicidade = nome_produto.split()[2] 
+  except:
+    periodicidade =''
+  return periodicidade
+
+def nome_produto_to_data_inicial(nome_produto):
+  try:
+    posicao_primeira_barra = nome_produto.find('/')
+    data_inicial = nome_produto[(posicao_primeira_barra-3):(posicao_primeira_barra+3)]
+  except:
+    data_inicial =''
+  return data_inicial
+
+def nome_produto_to_data_final(nome_produto):
+  try:
+    posicao_segunda_barra = nome_produto.rfind('/')
+    data_final = nome_produto[(posicao_segunda_barra-3):(posicao_segunda_barra+3)]
+  except:
+    data_final =''
+  return data_final
+
+def nome_produto_to_precificacao(nome_produto):
+  try:
+    posicao_hifen = nome_produto.find('-')
+    precificacao = nome_produto[posicao_hifen+1:]
+  except:
+    precificacao =''
+  return precificacao.upper()
+
+def datahora_to_data(datahora):
+  data_operacao = datahora[6:10]+'-'+datahora[3:5]+'-'+datahora[0:2]
+  return data_operacao
+
+# FILTRO DE OPERAÇÕES SEM SENTIDO/FORA DE PADRÃO
+def filtrar_ruido(operacoes_bbce):
+  # Filtro dos produtos
+  periodicidade_padrao = ['MEN', 'TRI', 'SEM', 'ANU', 'OUTROS', 'OTR', 'BIM', 'QUA']
+  operacoes_filtradas = operacoes_bbce[operacoes_bbce['Cancelado']=="Não"]
+  operacoes_filtradas = operacoes_filtradas[operacoes_filtradas['Periodicidade'].apply(lambda x: x in periodicidade_padrao)]
+  operacoes_filtradas = operacoes_filtradas[operacoes_filtradas['Tipo Contrato']=="Balcão"]
+
+  # Classificação das operações
+  operacoes_filtradas['Data/Hora'] = pd.to_datetime(operacoes_filtradas['Data/Hora'], format='%d/%m/%Y %H:%M:%S')
+  operacoes_filtradas = operacoes_filtradas.sort_values(by='Data/Hora',ascending=False)
+
+  return operacoes_filtradas
+
+# MODIFCAÇÃO PARA CANDLES
+def operacoes_to_candles(operacoes_filtradas):
+  # VOLUME
+  volume_total_mwm_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','MWm']].groupby(['Produto','Data Operação']).agg(func='sum')
+  volume_total_mwh_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','MWh']].groupby(['Produto','Data Operação']).agg(func='sum')
+  # MÁXIMO
+  max_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','Preço (R$)']].groupby(['Produto','Data Operação']).agg(func='max')
+  max_agg.columns=['MAX']
+  # MÍNIMO
+  min_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','Preço (R$)']].groupby(['Produto','Data Operação']).agg(func='min')
+  min_agg.columns=['MIN']
+  # FECHAMENTO
+  fec_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','Preço (R$)']].groupby(['Produto','Data Operação']).agg(func='first')
+  fec_agg.columns=['FEC']
+  # ABERTURA
+  abe_agg = operacoes_filtradas.loc[:,['Produto','Data Operação','Preço (R$)']].groupby(['Produto','Data Operação']).agg(func='last')
+  abe_agg.columns=['ABE']
+
+  candles_bbce = volume_total_mwm_agg.join(volume_total_mwh_agg).join(max_agg).join(min_agg).join(fec_agg).join(abe_agg)
+  
+  # COLUNAS PARA APLICAÇÃO DE FILTRO
+  candles_bbce['Submercado']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_submercado(x)).values
+  candles_bbce['Fonte']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_fonte(x)).values
+  candles_bbce['Periodicidade']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_periodicidade(x)).values
+  candles_bbce['Data Inicial']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_data_inicial(x)).values
+  candles_bbce['Data Final']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_data_final(x)).values
+  candles_bbce['Precificacao']=pd.Series(candles_bbce.index.get_level_values('Produto')).apply(lambda x: nome_produto_to_precificacao(x)).values
+  candles_bbce['Data'] = candles_bbce.index.get_level_values('Data Operação')
+  candles_bbce = candles_bbce.loc[:,['Data','ABE','MIN','MAX','FEC','Submercado','Fonte','Periodicidade','Data Inicial','Data Final','Precificacao']]
+
+  return candles_bbce
+
+# BUSCA POR OPERAÇÕES
+operacoes_bbce = pd.read_excel("bbce_todos_negocios_03_12_2021.xlsx")
+
+operacoes_bbce['Submercado'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_submercado(x))
+operacoes_bbce['Fonte'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_fonte(x))
+operacoes_bbce['Periodicidade'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_periodicidade(x))
+operacoes_bbce['Data Inicial'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_data_inicial(x))
+operacoes_bbce['Data Final'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_data_final(x))
+operacoes_bbce['Precificacao'] = operacoes_bbce['Produto'].apply(lambda x: nome_produto_to_precificacao(x))
+operacoes_bbce['Data Operação'] = operacoes_bbce['Data/Hora'].apply(lambda x: datahora_to_data(x))
+
+# TRATAMENTO DAS OPERAÇÕES
+operacoes_filtradas = filtrar_ruido(operacoes_bbce)
+
+# TRANSFORMAÇÃO EM CANDLES
+candles_bbce = operacoes_to_candles(operacoes_filtradas)
+
+params = candles_bbce.columns.values
+produtos = candles_bbce.index.get_level_values('Produto').values
+
+# layout ####
+page_1_layout = html.Div([
+    html.H1('Candles'),
+    dcc.Dropdown(
+        id='candles_dropdown',
+        options=[{'label': i, 'value': i} for i in produtos]
+    ),
+    dcc.Graph(id='grafico_candles'),
     html.Div([
         dash_table.DataTable(
-                            id='table',
-                            columns=[{"name": i, "id": i} for i in df.columns],
-                            data=df.to_dict('records'),
-                            )
-    ], style={"background-color":"red"}),
+            id='tabela_candles',
+            columns=(
+                [{'id': p, 'name': p} for p in params]
+            ),
+            data=candles_bbce.to_dict('records'),
+            )
+        ]),
 
-    # criação do evento com frequência por minuto
-    dcc.Interval(id='interval1min', interval=60 * 1000, n_intervals=0, max_intervals=-1),
-    # criação da tag de texto H1 do relógio de 1 minuto
-    html.H1(id='label1', children=''), 
+    html.Div(id='page-1-content'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go to KPIs Page', href='/page-kpis'),
+    html.Br(),
+    dcc.Link('Go back to home', href='/'),],
+    )
+# callback ####
+# texto que diz o o produto selecionado
+@app.callback(dash.dependencies.Output('page-1-content', 'children'),
+              [dash.dependencies.Input('candles_dropdown', 'value')])
+def page_1_dropdown(value):
+    return 'Produto selecionado "{}"'.format(value)
 
-    # criação do evento com frequência a cada 10 minutos
-    dcc.Interval(id='interval10min', interval=10 * 60 * 1000, n_intervals=0, max_intervals=-1),
-    # criação da tag de texto H1 do relógio de 10 minutos
-    html.H1(id='label2', children=''), 
+# grafico de candles
+@app.callback(dash.dependencies.Output('grafico_candles', 'figure'),
+              [dash.dependencies.Input('candles_dropdown', 'value')])
+def display_graph(nome_produto):
+    filtro_candles = candles_bbce.iloc[candles_bbce.index.get_level_values('Produto') == nome_produto]
+    
+    fig_candles = make_subplots(rows=1, cols=1, column_widths=[1], vertical_spacing= 0.02)
+    fig_candles.add_trace(go.Candlestick(x = filtro_candles.loc[:,"Data"].values,  open = filtro_candles.loc[:,"ABE"].values,  high = filtro_candles.loc[:,"MAX"].values,  low = filtro_candles.loc[:,"MIN"].values,   close = filtro_candles.loc[:,"FEC"].values,      showlegend=False),   row = 1, col = 1)
+    fig_candles.update_layout(showlegend = True,
+                                # desenhando caracteristicas do eixo x
+                                xaxis=dict(
+                                    # seletor de data por botão
+                                    rangeselector = dict( buttons=list([ dict(count=1, label="1m", step="month", stepmode="backward"), dict(count=6, label="6m", step="month", stepmode="backward"), dict(count=1, label="YTD", step="year", stepmode="todate"), dict(count=1, label="1y", step="year", stepmode="backward"), dict(step="all") ]) ),
+                                    rangeslider = dict( visible=False ),
+                                    type="date"))
+    return fig_candles
 
-    # criação do evento com frequência a cada hora
-    dcc.Interval(id='interval1hr', interval= 1* 60 * 60 * 1000, n_intervals=0, max_intervals=-1),
-    # criação da tag de texto H1 do relógio de 60 minutos
-    html.H1(id='label3', children='')
-])
 
-##### EVENTOS DE 1 MINUTO #########################################
-# evento = callback
-#
-@app.callback(Output('label1', 'children'),
-    [Input('interval1min', 'n_intervals')])
-def update_interval1min(n):
-    hora = datetime.now()
-    return str(hora)[0:16]
+# tabela de candles
+@app.callback(dash.dependencies.Output('tabela_candles', 'data'),
+              [dash.dependencies.Input('candles_dropdown', 'value')])
+def display_table(value):
+    data = candles_bbce.iloc[candles_bbce.index.get_level_values('Produto') == value].to_dict('records')
+    return data
 
-##### EVENTOS DE 10 MINUTOS #######################################
-# evento = callback
-# EXEMPLOS DE EVENTOS:
-# - 1) Busca de dados relativos ao portfólio
-@app.callback(Output('label2', 'children'),
-    [Input('interval10min', 'n_intervals')])
-def update_interval10min(n):
-    hora = datetime.now()
-    return str(hora)[0:16]
 
-##### EVENTOS DE 1 HORA ###########################################
-# evento = callback
-@app.callback(Output('label3', 'children'),
-    [Input('interval1hr', 'n_intervals')])
-def update_interval1hr(n):
-    hora = datetime.now()
-    return str(hora)[0:16]
+###########################################################################################
+#################################### PAGINA 2 #############################################
+###########################################################################################
 
-app.run_server(debug=False, port=5000)
+# layout ####
+page_2_layout = html.Div([
+    html.H1('Page 2'),
+    dcc.RadioItems(
+        id='page-2-radios',
+        options=[{'label': i, 'value': i} for i in ['Orange', 'Blue', 'Red']],
+        value='Orange'
+    ),
+    html.Div(id='page-2-content'),
+    html.Br(),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go to KPIs page', href='/page-kpis'),
+    html.Br(),
+    dcc.Link('Go back to home', href='/')])
+
+###########################################################################################
+#################################### PAGINA 3 #############################################
+###########################################################################################
+
+# layout ####
+page_3_layout = html.Div([
+    html.H1('Page 3'),
+
+
+    dcc.Input(id='input-1-state', type='text', value='Montreal'),
+    dcc.Input(id='input-2-state', type='text', value='Canada'),
+    html.Button(id='submit-button', n_clicks=0, children='Submit'),
+    html.Div(id='output-state'),
+
+
+
+    html.Div(id='page-3-content'),
+    html.Br(),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to KPIs Page', href='/page-kpis'),
+    html.Br(),
+    dcc.Link('Go back to home', href='/')])
+
+# callback ####
+@app.callback(dash.dependencies.Output('page-3-content', 'children'),
+              [dash.dependencies.Input('page-3-radios', 'value')])
+def page_3_radios(value):
+    return 'You have selected "{}"'.format(value)
+
+@app.callback(dash.dependencies.Output('output-state', 'children'),
+              dash.dependencies.Input('submit-button', 'n_clicks'),
+              dash.dependencies.State('input-1-state', 'value'),
+              dash.dependencies.State('input-2-state', 'value'))
+def update_output(n_clicks, input1, input2):
+    return ('The Button has been pressed {} times,'
+            'Input 1 is "{}",'
+            'and Input 2 is "{}"').format(n_clicks, input1, input2)
+
+
+###########################################################################################
+#################################### PAGINA KPIS #############################################
+###########################################################################################
+
+# layout ####
+page_kpis_layout = html.Div([
+    html.H1('KPIs'),
+
+    html.Div(id='page-kpis-content'),
+    html.Br(),
+    dcc.Link('Go to Page 1', href='/page-1'),
+    html.Br(),
+    dcc.Link('Go to Page 2', href='/page-2'),
+    html.Br(),
+    dcc.Link('Go to Page 3', href='/page-3'),
+    html.Br(),
+    dcc.Link('Go back to home', href='/')])
+
+
+
+
+
+
+
+###########################################################################################
+############################## Mudança de página do app ###################################
+###########################################################################################
+
+@app.callback(dash.dependencies.Output('page-content', 'children'),
+              [dash.dependencies.Input('url', 'pathname')])
+def display_page(pathname):
+    if pathname == '/':
+        return home_page
+    elif pathname == '/page-1':
+        return page_1_layout
+    elif pathname == '/page-2':
+        return page_2_layout
+    elif pathname == '/page-3':
+        return page_3_layout
+    elif pathname == '/page-kpis':
+        return page_kpis_layout
+    else:
+        return index_page
+    # You could also return a 404 "URL not found" page here
+
+@app.callback(
+    [
+        Output("sidebar", "style"),
+        Output("page-content", "style"),
+        Output("side_click", "data"),
+    ],
+    [Input("btn_sidebar", "n_clicks")],
+    [
+        State("side_click", "data"),
+    ])
+def toggle_sidebar(n, nclick):
+    if n:
+        if nclick == "SHOW":
+            sidebar_style = SIDEBAR_HIDDEN
+            content_style = CONTENT_STYLE_sidebar_hidden
+            cur_nclick = "HIDDEN"
+        else:
+            sidebar_style = SIDEBAR_STYLE
+            content_style = CONTENT_STYLE
+            cur_nclick = "SHOW"
+    else:
+        sidebar_style = SIDEBAR_STYLE
+        content_style = CONTENT_STYLE
+        cur_nclick = 'SHOW'
+
+    return sidebar_style, content_style, cur_nclick
+
+###########################################################################################
+############################### Inicialização do APP ######################################
+###########################################################################################
+import os
+if __name__ == '__main__':
+    app.run_server(debug=False,port=os.getenv("PORT",5000))
